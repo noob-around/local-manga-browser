@@ -862,7 +862,32 @@ summary::-webkit-details-marker {
   user-select: none;
 }
 
-.reader-canvas img {
+.reader-page-strip {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.reader-page-strip.is-animating {
+  transition: transform 180ms ease-out;
+}
+
+.reader-page {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.reader-page-previous {
+  transform: translateX(-100%);
+}
+
+.reader-page-next {
+  transform: translateX(100%);
+}
+
+.reader-page img {
   max-width: 100%;
   max-height: 100vh;
   object-fit: contain;

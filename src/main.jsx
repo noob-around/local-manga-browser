@@ -587,11 +587,14 @@ function ReaderView({ comic, onProgress }) {
   const pageImagesRef = useRef([]);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [swipeAnimating, setSwipeAnimating] = useState(false);
   const [showProgress, setShowProgress] = useState(false);
   const [status, setStatus] = useState({ loading: true, error: '' });
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const pageIndexRef = useRef(0);
+  const swipeTimerRef = useRef(null);
   const pointersRef = useRef(new Map());
   const gestureRef = useRef({
     startX: 0,
@@ -665,6 +668,32 @@ function ReaderView({ comic, onProgress }) {
   useEffect(() => {
     if (pages.length === 0) return undefined;
     let cancelled = false;
+    const adjacentIndexes = [pageIndex - 1, pageIndex + 1].filter((index) => index >= 0 && index < pages.length);
+
+    adjacentIndexes.forEach(async (index) => {
+      if (pageImagesRef.current[index]) return;
+      try {
+        const payload = await api.readComicPage(pages[index]);
+        if (cancelled) return;
+        pageImagesRef.current[index] = payload.dataUrl;
+        setPageImages((current) => {
+          const next = [...current];
+          next[index] = payload.dataUrl;
+          return next;
+        });
+      } catch {
+        // The current page should stay usable even if neighbor preview loading fails.
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pageIndex, pages]);
+
+  useEffect(() => {
+    if (pages.length === 0) return undefined;
+    let cancelled = false;
     let cursor = 0;
     const workerCount = Math.min(3, pages.length);
 
@@ -716,8 +745,16 @@ function ReaderView({ comic, onProgress }) {
   useEffect(() => {
     setZoom(1);
     setOffset({ x: 0, y: 0 });
+    setSwipeOffset(0);
+    setSwipeAnimating(false);
     pointersRef.current.clear();
   }, [pageIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (swipeTimerRef.current) window.clearTimeout(swipeTimerRef.current);
+    };
+  }, []);
 
   function clampOffset(nextOffset, nextZoom = zoom) {
     const canvas = canvasRef.current;
@@ -774,13 +811,21 @@ function ReaderView({ comic, onProgress }) {
     const deltaY = event.clientY - gesture.startY;
     if (zoom > 1.02) {
       gesture.moved = true;
+      setSwipeOffset(0);
       setOffset(clampOffset({
         x: gesture.startOffset.x + deltaX,
         y: gesture.startOffset.y + deltaY,
       }));
       return;
     }
-    if (Math.hypot(deltaX, deltaY) > 10) {
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.1) {
+      gesture.moved = true;
+      const hasPrevious = pageIndexRef.current > 0;
+      const hasNext = pageIndexRef.current < pages.length - 1;
+      const edgePull = (deltaX > 0 && !hasPrevious) || (deltaX < 0 && !hasNext);
+      setSwipeAnimating(false);
+      setSwipeOffset(edgePull ? deltaX * 0.28 : deltaX);
+    } else if (Math.hypot(deltaX, deltaY) > 10) {
       gesture.moved = true;
     }
   }
@@ -791,7 +836,25 @@ function ReaderView({ comic, onProgress }) {
     const deltaY = event.clientY - gesture.startY;
     pointersRef.current.delete(event.pointerId);
     if (zoom <= 1.02 && !gesture.pinching && Math.abs(deltaX) > 52 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
-      go(deltaX < 0 ? 1 : -1);
+      const direction = deltaX < 0 ? 1 : -1;
+      const nextIndex = pageIndexRef.current + direction;
+      const canTurn = nextIndex >= 0 && nextIndex < pages.length;
+      const canvasWidth = canvasRef.current?.clientWidth || window.innerWidth;
+      setSwipeAnimating(true);
+      setSwipeOffset(canTurn ? -direction * canvasWidth : 0);
+      if (swipeTimerRef.current) window.clearTimeout(swipeTimerRef.current);
+      swipeTimerRef.current = window.setTimeout(() => {
+        if (canTurn) go(direction);
+        setSwipeOffset(0);
+        setSwipeAnimating(false);
+      }, 180);
+    } else if (zoom <= 1.02 && !gesture.pinching) {
+      setSwipeAnimating(true);
+      setSwipeOffset(0);
+      if (swipeTimerRef.current) window.clearTimeout(swipeTimerRef.current);
+      swipeTimerRef.current = window.setTimeout(() => {
+        setSwipeAnimating(false);
+      }, 180);
     }
     if (pointersRef.current.size === 0) {
       window.setTimeout(() => {
@@ -819,6 +882,9 @@ function ReaderView({ comic, onProgress }) {
     setPageIndex(nextIndex);
   }
 
+  const previousImage = pageIndex > 0 ? pageImages[pageIndex - 1] : '';
+  const nextImage = pageIndex < pages.length - 1 ? pageImages[pageIndex + 1] : '';
+
   return (
     <main className="reader-screen">
       <section
@@ -833,12 +899,25 @@ function ReaderView({ comic, onProgress }) {
         {status.loading && <p>正在读取图片...</p>}
         {status.error && <p className="reader-error">{status.error}</p>}
         {image && (
-          <img
-            ref={imageRef}
-            src={image}
-            alt={`${comic.title} 第 ${pageIndex + 1} 页`}
-            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
-          />
+          <div
+            className={`reader-page-strip${swipeAnimating ? ' is-animating' : ''}`}
+            style={{ transform: `translateX(${swipeOffset}px)` }}
+          >
+            <div className="reader-page reader-page-previous">
+              {previousImage && <img src={previousImage} alt={`${comic.title} 第 ${pageIndex} 页`} />}
+            </div>
+            <div className="reader-page reader-page-current">
+              <img
+                ref={imageRef}
+                src={image}
+                alt={`${comic.title} 第 ${pageIndex + 1} 页`}
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+              />
+            </div>
+            <div className="reader-page reader-page-next">
+              {nextImage && <img src={nextImage} alt={`${comic.title} 第 ${pageIndex + 2} 页`} />}
+            </div>
+          </div>
         )}
         {showProgress && pages.length > 0 && (
           <div className="reader-progress-panel" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
