@@ -36,6 +36,85 @@ const shelves = [
   { id: 'reading', label: '历史记录' },
 ];
 
+const coverCache = new Map();
+const coverListeners = new Set();
+
+function notifyCoverListeners() {
+  coverListeners.forEach((listener) => listener());
+}
+
+function getCoverCacheKey(comic) {
+  const source = comic?.source || {};
+  return [
+    comic?.id || '',
+    source.coverUri || '',
+    source.coverPath || '',
+    Array.isArray(source.pages) ? source.pages[0]?.uri || source.pages[0]?.path || '' : '',
+  ].join('|');
+}
+
+function getCachedCover(comic) {
+  return coverCache.get(getCoverCacheKey(comic));
+}
+
+function preloadImage(src) {
+  if (!src || typeof Image === 'undefined') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function preloadComicCover(comic) {
+  if (!comic) return Promise.resolve('');
+  const key = getCoverCacheKey(comic);
+  const cached = coverCache.get(key);
+  if (cached?.status === 'ready') return Promise.resolve(cached.dataUrl);
+  if (cached?.status === 'loading') return cached.promise;
+
+  const promise = api
+    .getComicCover(comic)
+    .then(async (payload) => {
+      const dataUrl = payload.dataUrl || '';
+      await preloadImage(dataUrl);
+      coverCache.set(key, { status: 'ready', dataUrl });
+      notifyCoverListeners();
+      return dataUrl;
+    })
+    .catch((error) => {
+      coverCache.set(key, { status: 'error', error });
+      notifyCoverListeners();
+      return '';
+    });
+
+  coverCache.set(key, { status: 'loading', promise });
+  return promise;
+}
+
+function useCoverImage(comic) {
+  const [snapshot, setSnapshot] = useState(() => getCachedCover(comic));
+
+  useEffect(() => {
+    if (!comic) return undefined;
+
+    function refreshCover() {
+      setSnapshot(getCachedCover(comic));
+    }
+
+    refreshCover();
+    coverListeners.add(refreshCover);
+    preloadComicCover(comic);
+
+    return () => {
+      coverListeners.delete(refreshCover);
+    };
+  }, [comic]);
+
+  return snapshot?.status === 'ready' ? snapshot.dataUrl : '';
+}
+
 function App() {
   const [comics, setComics] = useState(initialComics);
   const [tags, setTags] = useState(initialTags);
@@ -88,6 +167,27 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (comics.length === 0) return undefined;
+    let cancelled = false;
+    let cursor = 0;
+    const workerCount = Math.min(4, comics.length);
+
+    async function preloadWorker() {
+      while (!cancelled) {
+        const comic = comics[cursor];
+        cursor += 1;
+        if (!comic) return;
+        await preloadComicCover(comic);
+      }
+    }
+
+    for (let i = 0; i < workerCount; i += 1) preloadWorker();
+    return () => {
+      cancelled = true;
+    };
+  }, [comics]);
 
   const selectedComic = view.comicId ? comics.find((comic) => comic.id === view.comicId) : null;
 
@@ -457,26 +557,12 @@ function ComicCard({ comic, gallery, onOpen }) {
 }
 
 function Cover({ className = '', comic, variant, title }) {
-  const [coverImage, setCoverImage] = useState('');
   const [failed, setFailed] = useState(false);
+  const coverImage = useCoverImage(comic);
 
   useEffect(() => {
-    if (!comic) return;
-    let cancelled = false;
     setFailed(false);
-    setCoverImage('');
-    api
-      .getComicCover(comic)
-      .then((payload) => {
-        if (!cancelled) setCoverImage(payload.dataUrl || '');
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [comic.id]);
+  }, [comic?.id]);
 
   return (
     <div className={`cover-art ${variant} ${className}`} aria-label={title}>
