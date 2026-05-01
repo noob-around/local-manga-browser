@@ -172,7 +172,7 @@ function App() {
   function goBack() {
     setView((current) => {
       if (current.name === 'reader') return { name: 'detail', comicId: current.comicId };
-      if (current.name === 'detail' || current.name === 'search' || current.name === 'galleries' || current.name === 'settings') return { name: 'home' };
+      if (current.name === 'detail' || current.name === 'search' || current.name === 'galleries' || current.name === 'gallerySelect' || current.name === 'settings') return { name: 'home' };
       return current;
     });
   }
@@ -201,9 +201,8 @@ function App() {
           activeShelf={activeShelf}
           comics={visibleComics}
           galleries={galleries}
-          onGalleryChange={setActiveGallery}
           onOpenComic={(comicId) => setView({ name: 'detail', comicId })}
-          onOpenGalleries={() => setView({ name: 'galleries' })}
+          onOpenGallerySelect={() => setView({ name: 'gallerySelect' })}
           onOpenSearch={() => setView({ name: 'search' })}
           onOpenSettings={() => setView({ name: 'settings' })}
           onReadComic={(comicId) => setView({ name: 'reader', comicId })}
@@ -235,6 +234,20 @@ function App() {
           tags={tags}
           onBack={goBack}
           onOpenComic={(comicId) => setView({ name: 'detail', comicId })}
+        />
+      )}
+
+      {view.name === 'gallerySelect' && (
+        <GallerySelectView
+          activeGallery={activeGallery}
+          comics={comics}
+          galleries={galleries}
+          onBack={goBack}
+          onOpenGalleries={() => setView({ name: 'galleries' })}
+          onSelectGallery={(galleryId) => {
+            setActiveGallery(galleryId);
+            setView({ name: 'home' });
+          }}
         />
       )}
 
@@ -296,15 +309,15 @@ function HomeView({
   activeShelf,
   comics,
   galleries,
-  onGalleryChange,
   onOpenComic,
-  onOpenGalleries,
+  onOpenGallerySelect,
   onOpenSearch,
   onOpenSettings,
   onReadComic,
   onShelfChange,
 }) {
   const isHistory = activeShelf === 'reading';
+  const activeGalleryName = activeGallery === 'all' ? '全部画廊' : galleries.find((gallery) => gallery.id === activeGallery)?.name || '全部画廊';
 
   return (
     <>
@@ -336,22 +349,14 @@ function HomeView({
         </section>
 
         {!isHistory && (
-          <section className="gallery-filter">
-            <button className={activeGallery === 'all' ? 'gallery-pill active' : 'gallery-pill'} onClick={() => onGalleryChange('all')}>
-              全部画廊
-            </button>
-            {galleries.map((gallery) => (
-              <button
-                className={activeGallery === gallery.id ? 'gallery-pill active' : 'gallery-pill'}
-                key={gallery.id}
-                onClick={() => onGalleryChange(gallery.id)}
-              >
-                <span className="dot" style={{ background: gallery.color }} />
-                {gallery.name}
-              </button>
-            ))}
-            <button className="gallery-manage" onClick={onOpenGalleries} aria-label="管理画廊">
-              <Menu size={18} />
+          <section className="gallery-summary" aria-label="当前画廊">
+            <div>
+              <span>当前画廊</span>
+              <strong>{activeGalleryName}</strong>
+            </div>
+            <button className="choose-gallery-button" onClick={onOpenGallerySelect}>
+              <Grid2X2 size={18} />
+              选择画廊
             </button>
           </section>
         )}
@@ -370,6 +375,70 @@ function HomeView({
         {comics.length === 0 && <EmptyState icon={<Folder size={42} />} title={isHistory ? '还没有阅读记录' : '当前书架没有漫画'} />}
       </main>
     </>
+  );
+}
+
+function GallerySelectView({ activeGallery, comics, galleries, onBack, onOpenGalleries, onSelectGallery }) {
+  const galleryCards = [
+    {
+      id: 'all',
+      name: '全部画廊',
+      color: '#009688',
+      comics,
+    },
+    ...galleries.map((gallery) => ({
+      ...gallery,
+      comics: comics.filter((comic) => comic.gallery === gallery.id),
+    })),
+  ];
+
+  return (
+    <>
+      <AppTopBar
+        title="选择画廊"
+        onBack={onBack}
+        actions={
+          <button className="icon-button" onClick={onOpenGalleries} aria-label="管理画廊">
+            <Menu size={21} />
+          </button>
+        }
+      />
+      <main className="screen gallery-select-screen">
+        <section className="library-grid">
+          {galleryCards.map((gallery) => (
+            <GalleryCard
+              gallery={gallery}
+              isActive={activeGallery === gallery.id}
+              key={gallery.id}
+              onOpen={onSelectGallery}
+            />
+          ))}
+        </section>
+      </main>
+    </>
+  );
+}
+
+function GalleryCard({ gallery, isActive, onOpen }) {
+  const firstComic = gallery.comics[0];
+
+  return (
+    <button className={isActive ? 'comic-card gallery-card active' : 'comic-card gallery-card'} onClick={() => onOpen(gallery.id)}>
+      {firstComic ? (
+        <Cover className="card-cover" comic={firstComic} variant={firstComic.cover} title={gallery.name} />
+      ) : (
+        <div className="cover-art card-cover empty-gallery-cover">
+          <Folder size={34} />
+          <span>无漫画</span>
+        </div>
+      )}
+      <span className="card-title">{gallery.name}</span>
+      <span className="card-meta">{firstComic ? `${gallery.comics.length} 本漫画` : '无漫画'}</span>
+      <span className="card-footer">
+        <span className="dot" style={{ background: gallery.color }} />
+        <span>{isActive ? '当前画廊' : '进入画廊'}</span>
+      </span>
+    </button>
   );
 }
 
