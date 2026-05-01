@@ -47,6 +47,14 @@ button {
   position: relative;
 }
 
+.app-shell.reader-mode {
+  width: 100vw;
+  max-width: none;
+  min-height: 100vh;
+  background: #111;
+  box-shadow: none;
+}
+
 .status-bar {
   height: 24px;
   padding: 0 36px;
@@ -836,7 +844,7 @@ summary::-webkit-details-marker {
 }
 
 .reader-screen {
-  min-height: calc(100vh - 82px);
+  min-height: 100vh;
   background: #111;
   display: grid;
   grid-template-rows: 1fr;
@@ -847,7 +855,7 @@ summary::-webkit-details-marker {
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: 10px;
+  padding: 0;
   color: #d6dddd;
   overflow: hidden;
   touch-action: none;
@@ -856,7 +864,7 @@ summary::-webkit-details-marker {
 
 .reader-canvas img {
   max-width: 100%;
-  max-height: calc(100vh - 82px);
+  max-height: 100vh;
   object-fit: contain;
   transform-origin: center center;
   will-change: transform;
@@ -1045,5 +1053,12 @@ summary::-webkit-details-marker {
     min-height: calc(100vh - 36px);
     border-radius: 14px;
     overflow: hidden;
+  }
+
+  .app-shell.reader-mode {
+    margin-top: 0;
+    margin-bottom: 0;
+    min-height: 100vh;
+    border-radius: 0;
   }
 }

@@ -190,9 +190,11 @@ function App() {
     };
   }, [view]);
 
+  const isReaderView = view.name === 'reader';
+
   return (
-    <div className="app-shell">
-      <StatusBar />
+    <div className={`app-shell${isReaderView ? ' reader-mode' : ''}`}>
+      {!isReaderView && <StatusBar />}
       {view.name === 'home' && (
         <HomeView
           activeGallery={activeGallery}
@@ -223,7 +225,7 @@ function App() {
       )}
 
       {view.name === 'reader' && selectedComic && (
-        <ReaderView comic={selectedComic} onBack={goBack} onProgress={updateReadingProgress} />
+        <ReaderView comic={selectedComic} onProgress={updateReadingProgress} />
       )}
 
       {view.name === 'search' && (
@@ -577,7 +579,7 @@ function ResultRow({ comic, gallery, onOpen }) {
   );
 }
 
-function ReaderView({ comic, onBack, onProgress }) {
+function ReaderView({ comic, onProgress }) {
   const [pages, setPages] = useState([]);
   const [pageIndex, setPageIndex] = useState(0);
   const [image, setImage] = useState('');
@@ -818,47 +820,44 @@ function ReaderView({ comic, onBack, onProgress }) {
   }
 
   return (
-    <>
-      <AppTopBar title={comic.title} onBack={onBack} />
-      <main className="reader-screen">
-        <section
-          ref={canvasRef}
-          className="reader-canvas"
-          onClick={onCanvasClick}
-          onPointerCancel={onPointerUp}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-        >
-          {status.loading && <p>正在读取图片...</p>}
-          {status.error && <p className="reader-error">{status.error}</p>}
-          {image && (
-            <img
-              ref={imageRef}
-              src={image}
-              alt={`${comic.title} 第 ${pageIndex + 1} 页`}
-              style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+    <main className="reader-screen">
+      <section
+        ref={canvasRef}
+        className="reader-canvas"
+        onClick={onCanvasClick}
+        onPointerCancel={onPointerUp}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
+        {status.loading && <p>正在读取图片...</p>}
+        {status.error && <p className="reader-error">{status.error}</p>}
+        {image && (
+          <img
+            ref={imageRef}
+            src={image}
+            alt={`${comic.title} 第 ${pageIndex + 1} 页`}
+            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
+          />
+        )}
+        {showProgress && pages.length > 0 && (
+          <div className="reader-progress-panel" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            <span>{pageIndex + 1}</span>
+            <input
+              aria-label="阅读进度"
+              max={pages.length}
+              min="1"
+              onChange={(event) => jumpToPage(event.target.value)}
+              onInput={(event) => jumpToPage(event.target.value)}
+              style={{ '--reader-progress': `${pages.length > 1 ? (pageIndex / (pages.length - 1)) * 100 : 0}%` }}
+              type="range"
+              value={pageIndex + 1}
             />
-          )}
-          {showProgress && pages.length > 0 && (
-            <div className="reader-progress-panel" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-              <span>{pageIndex + 1}</span>
-              <input
-                aria-label="阅读进度"
-                max={pages.length}
-                min="1"
-                onChange={(event) => jumpToPage(event.target.value)}
-                onInput={(event) => jumpToPage(event.target.value)}
-                style={{ '--reader-progress': `${pages.length > 1 ? (pageIndex / (pages.length - 1)) * 100 : 0}%` }}
-                type="range"
-                value={pageIndex + 1}
-              />
-              <span>{pages.length}</span>
-            </div>
-          )}
-        </section>
-      </main>
-    </>
+            <span>{pages.length}</span>
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
 
