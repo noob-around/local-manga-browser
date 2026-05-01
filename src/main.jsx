@@ -582,7 +582,6 @@ function ResultRow({ comic, gallery, onOpen }) {
 function ReaderView({ comic, onProgress }) {
   const [pages, setPages] = useState([]);
   const [pageIndex, setPageIndex] = useState(0);
-  const [image, setImage] = useState('');
   const [pageImages, setPageImages] = useState([]);
   const pageImagesRef = useRef([]);
   const [zoom, setZoom] = useState(1);
@@ -634,14 +633,18 @@ function ReaderView({ comic, onProgress }) {
     let cancelled = false;
     const cachedImage = pageImagesRef.current[pageIndex];
     if (cachedImage) {
-      setImage(cachedImage);
+      setPageImages((current) => {
+        if (current[pageIndex] === cachedImage) return current;
+        const next = [...current];
+        next[pageIndex] = cachedImage;
+        return next;
+      });
       setStatus({ loading: false, error: '' });
       return () => {
         cancelled = true;
       };
     }
     setStatus({ loading: true, error: '' });
-    setImage('');
     api
       .readComicPage(pages[pageIndex])
       .then((payload) => {
@@ -653,7 +656,6 @@ function ReaderView({ comic, onProgress }) {
           next[pageIndex] = dataUrl;
           return next;
         });
-        setImage(dataUrl);
         setStatus({ loading: false, error: '' });
       })
       .catch((error) => {
@@ -712,8 +714,7 @@ function ReaderView({ comic, onProgress }) {
             next[index] = payload.dataUrl;
             return next;
           });
-          if (index === pageIndex) {
-            setImage(payload.dataUrl);
+          if (index === pageIndexRef.current) {
             setStatus({ loading: false, error: '' });
           }
         } catch {
@@ -883,6 +884,7 @@ function ReaderView({ comic, onProgress }) {
   }
 
   const previousImage = pageIndex > 0 ? pageImages[pageIndex - 1] : '';
+  const currentImage = pageImages[pageIndex] || '';
   const nextImage = pageIndex < pages.length - 1 ? pageImages[pageIndex + 1] : '';
 
   return (
@@ -898,7 +900,7 @@ function ReaderView({ comic, onProgress }) {
       >
         {status.loading && <p>正在读取图片...</p>}
         {status.error && <p className="reader-error">{status.error}</p>}
-        {image && (
+        {currentImage && (
           <div
             className={`reader-page-strip${swipeAnimating ? ' is-animating' : ''}`}
             style={{ transform: `translateX(${swipeOffset}px)` }}
@@ -909,7 +911,7 @@ function ReaderView({ comic, onProgress }) {
             <div className="reader-page reader-page-current">
               <img
                 ref={imageRef}
-                src={image}
+                src={currentImage}
                 alt={`${comic.title} 第 ${pageIndex + 1} 页`}
                 style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
               />
