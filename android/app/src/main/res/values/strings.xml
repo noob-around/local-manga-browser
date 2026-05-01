@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">本地漫画阅读器</string>
+    <string name="title_activity_main">本地漫画阅读器</string>
+    <string name="package_name">com.localmanga.reader</string>
+    <string name="custom_url_scheme">com.localmanga.reader</string>
+</resources>

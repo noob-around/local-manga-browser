@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Frontend build output
+dist/
+
+# Local app data and state
+app-workspace/
+reader-state.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and editor files
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+*.iml
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

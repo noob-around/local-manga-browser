@@ -1,0 +1,8 @@
+{
+  "appId": "com.localmanga.reader",
+  "appName": "本地漫画阅读器",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
